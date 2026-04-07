@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a1a">
+  <title>BugSmash!</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a1a;
+      --surface: #12122a;
+      --dot-red:    #ff3c5a;
+      --dot-orange: #ff8c00;
+      --dot-cyan:   #00e5ff;
+      --dot-green:  #39ff14;
+      --text: #e8e8ff;
+      --muted: #5a5a8a;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Starfield background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,.4) 0%, transparent 100%),
+        radial-gradient(1px 1px at 80% 10%, rgba(255,255,255,.3) 0%, transparent 100%),
+        radial-gradient(1px 1px at 50% 70%, rgba(255,255,255,.2) 0%, transparent 100%),
+        radial-gradient(1px 1px at 10% 80%, rgba(255,255,255,.3) 0%, transparent 100%),
+        radial-gradient(1px 1px at 90% 60%, rgba(255,255,255,.2) 0%, transparent 100%),
+        radial-gradient(2px 2px at 30% 55%, rgba(255,255,255,.15) 0%, transparent 100%),
+        radial-gradient(1px 1px at 65% 40%, rgba(255,255,255,.25) 0%, transparent 100%),
+        radial-gradient(1px 1px at 45% 15%, rgba(255,255,255,.3) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      z-index: 1;
+    }
+
+    /* ── HEADER ── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      background: rgba(18,18,42,.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      gap: 20px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    #score-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #score-label {
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    #score {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 48px;
+      line-height: 1;
+      color: var(--text);
+      transition: transform .1s;
+    }
+    #score.pop {
+      transform: scale(1.25);
+      color: var(--dot-green);
+    }
+
+    /* Level + timer pill */
+    #meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-end;
+    }
+    .pill {
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--muted);
+    }
+    .pill span { color: var(--text); }
+
+    /* ── ARENA ── */
+    #arena {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── DOTS ── */
+    .dot {
+      position: absolute;
+      border-radius: 50%;
+      cursor: pointer;
+      transform: translate(-50%, -50%) scale(0);
+      animation: dotAppear .2s ease-out forwards;
+      will-change: transform;
+    }
+    .dot::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      opacity: .4;
+      animation: ring 1s ease-out infinite;
+    }
+
+    @keyframes dotAppear {
+      from { transform: translate(-50%,-50%) scale(0) rotate(-30deg); }
+      to   { transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+    }
+    @keyframes ring {
+      0%   { transform: scale(1);   opacity: .4; }
+      100% { transform: scale(1.8); opacity: 0;  }
+    }
+
+    .dot[data-color="red"]    { background: var(--dot-red);    color: var(--dot-red);    box-shadow: 0 0 20px var(--dot-red); }
+    .dot[data-color="orange"] { background: var(--dot-orange); color: var(--dot-orange); box-shadow: 0 0 20px var(--dot-orange); }
+    .dot[data-color="cyan"]   { background: var(--dot-cyan);   color: var(--dot-cyan);   box-shadow: 0 0 20px var(--dot-cyan); }
+    .dot[data-color="green"]  { background: var(--dot-green);  color: var(--dot-green);  box-shadow: 0 0 20px var(--dot-green); }
+
+    /* Timer ring around dot */
+    .dot-timer {
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+    }
+
+    /* Shrinking dot when time running out */
+    .dot.expiring {
+      animation: pulse .3s ease-in-out infinite alternate;
+    }
+    @keyframes pulse {
+      from { filter: brightness(1); }
+      to   { filter: brightness(2); }
+    }
+
+    /* Hit / miss particles */
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: fly .5s ease-out forwards;
+    }
+    @keyframes fly {
+      to { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+    }
+
+    /* Floating score text */
+    .float-score {
+      position: absolute;
+      font-family: 'Nunito', sans-serif;
+      font-size: 28px;
+      font-weight: 900;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: floatUp .7s ease-out forwards;
+      z-index: 20;
+    }
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+      100% { opacity: 0; transform: translate(-50%, calc(-50% - 60px)) scale(.8); }
+    }
+
+    /* Miss flash */
+    #miss-flash {
+      position: fixed; inset: 0;
+      background: rgba(255,0,0,.15);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 5;
+      transition: opacity .1s;
+    }
+    #miss-flash.active { opacity: 1; }
+
+    /* ── SCREENS ── */
+    .screen {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px;
+      z-index: 100;
+      background: rgba(10,10,26,.95);
+      backdrop-filter: blur(12px);
+      padding: 30px 24px;
+    }
+    .screen.hidden { display: none; }
+
+    .game-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: clamp(52px, 15vw, 80px);
+      line-height: 1;
+      background: linear-gradient(135deg, var(--dot-cyan), var(--dot-green), var(--dot-orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: center;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    /* Dot legend */
+    .legend {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      max-width: 300px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .legend-dot {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-dot.red    { background: var(--dot-red);    box-shadow: 0 0 10px var(--dot-red); }
+    .legend-dot.orange { background: var(--dot-orange); box-shadow: 0 0 10px var(--dot-orange); }
+    .legend-dot.cyan   { background: var(--dot-cyan);   box-shadow: 0 0 10px var(--dot-cyan); }
+    .legend-dot.green  { background: var(--dot-green);  box-shadow: 0 0 10px var(--dot-green); }
+    .legend-text { font-size: 13px; line-height: 1.3; }
+    .legend-pts  { font-size: 18px; font-family: 'Nunito', sans-serif; color: var(--text); }
+
+    .btn {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 26px;
+      letter-spacing: 2px;
+      padding: 14px 44px;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      transition: transform .1s, box-shadow .1s;
+      -webkit-tap-highlight-color: transparent;
+      width: 100%;
+      max-width: 300px;
+    }
+    .btn:active { transform: scale(.94); }
+    .btn-slim { padding-top: 7px; padding-bottom: 7px; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--dot-cyan), var(--dot-green));
+      color: #0a0a1a;
+      box-shadow: 0 0 30px rgba(0,229,255,.3);
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,.08);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.15);
+    }
+    .btn-share {
+      background: rgba(0,229,255,.12);
+      color: var(--dot-cyan);
+      border: 1px solid rgba(0,229,255,.3);
+    }
+
+    /* Game over screen */
+    #gameover-score {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 72px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--dot-cyan), var(--dot-green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .name-input-wrap {
+      width: 100%; max-width: 300px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .name-input-wrap label {
+      font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+    }
+    .name-input-wrap input {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      outline: none;
+      text-align: center;
+      transition: border-color .2s;
+    }
+    .name-input-wrap input:focus { border-color: var(--dot-cyan); }
+
+    /* Top 10 */
+    #leaderboard {
+      width: 100%; max-width: 320px;
+      max-height: 40vh;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .lb-row {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 10px;
+      padding: 8px 14px;
+    }
+    .lb-row.highlight {
+      background: rgba(0,229,255,.1);
+      border-color: rgba(0,229,255,.3);
+    }
+    .lb-rank {
+      font-family: 'Nunito', sans-serif;
+      font-size: 20px;
+      color: var(--muted);
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .lb-rank.gold   { color: #ffd700; }
+    .lb-rank.silver { color: #c0c0c0; }
+    .lb-rank.bronze { color: #cd7f32; }
+    .lb-name  { flex: 1; font-weight: 700; font-size: 15px; }
+    .lb-level { font-size: 12px; color: var(--muted); min-width: 36px; text-align: right; }
+    .lb-score { font-family: 'Nunito', sans-serif; font-size: 22px; color: var(--dot-cyan); margin-left: 8px; }
+    .lb-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 20px; }
+
+    /* Chaos shake for high levels */
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      15%      { transform: translateX(-6px) rotate(-.5deg); }
+      30%      { transform: translateX(8px)  rotate(.5deg); }
+      45%      { transform: translateX(-5px); }
+      60%      { transform: translateX(6px); }
+      75%      { transform: translateX(-3px); }
+    }
+    #arena.shake { animation: shake .4s ease-in-out; }
+
+    /* Level-up flash overlay */
+    #levelup-flash {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 6;
+      transition: opacity .1s;
+    }
+    #levelup-flash.active {
+      opacity: 1;
+      animation: flashOut .6s ease-out forwards;
+    }
+    @keyframes flashOut {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    #levelup-flash .luf-text {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 52px;
+      color: #fff;
+      text-shadow: 0 0 30px var(--dot-cyan), 0 0 60px var(--dot-cyan);
+      letter-spacing: 4px;
+    }
+    /* ── LIVES ── */
+    #lives-display {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .life-icon {
+      font-size: 22px;
+      line-height: 1;
+      transition: transform .2s, filter .2s, opacity .3s;
+      display: inline-block;
+    }
+    .life-icon.lost {
+      filter: grayscale(1) brightness(0.4);
+      opacity: 0.4;
+    }
+    @keyframes shake-lives-anim {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-4px) rotate(-5deg); }
+      40%      { transform: translateX(4px)  rotate(5deg); }
+      60%      { transform: translateX(-3px); }
+      80%      { transform: translateX(3px); }
+    }
+    #lives-display.shake-lives { animation: shake-lives-anim .4s ease-in-out; }
+
+    /* ── HEART PICKUP ── */
+    .heart-pickup {
+      position: absolute;
+      font-size: 36px;
+      line-height: 1;
+      cursor: pointer;
+      transform: translate(-50%, -50%) scale(0);
+      animation: heartAppear .25s cubic-bezier(.17,.67,.41,1.4) forwards;
+      filter: drop-shadow(0 0 12px #ff69b4) drop-shadow(0 0 24px #ff1493);
+      z-index: 5;
+    }
+    @keyframes heartAppear {
+      from { transform: translate(-50%,-50%) scale(0) rotate(-20deg); }
+      to   { transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+    }
+    .heart-pickup.expiring {
+      animation: heartPulse .25s ease-in-out infinite alternate;
+    }
+    @keyframes heartPulse {
+      from { filter: drop-shadow(0 0 12px #ff69b4) brightness(1); }
+      to   { filter: drop-shadow(0 0 24px #ff1493) brightness(1.5); }
+    }
+
+    #gameover-click-block {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      cursor: default;
+    }
+    #gameover-click-block.unblocked { display: none; }
+
+    #version-tag {
+      position: fixed;
+      bottom: 6px;
+      right: 10px;
+      font-size: 10px;
+      color: rgba(90,90,138,.5);
+      pointer-events: none;
+      z-index: 201;
+      letter-spacing: 1px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div id="header">
+    <div id="score-wrap">
+      <div id="score-label">SKÓRE</div>
+      <div id="score">0</div>
+    </div>
+    <div id="lives-display"></div>
+    <div id="meta">
+      <div class="pill">LEVEL <span id="level-display">1</span></div>
+      <div class="pill">ZBÝVÁ <span id="time-display">90</span>s</div>
+    </div>
+  </div>
+  <div id="arena"></div>
+</div>
+
+<div id="miss-flash"></div>
+<div id="levelup-flash"><div class="luf-text">LEVEL UP!</div></div>
+
+<!-- START SCREEN -->
+<div id="screen-start" class="screen">
+  <div class="game-title">SMASH them all!</div>
+  <div class="subtitle">Máš 5 životů. Nestihnutý puntík = ztráta života.<br>Od levelu 9 se objevují srdce — chyť je!</div>
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot green"></div>
+      <div class="legend-text"><div class="legend-pts">+1</div><div style="font-size:11px;color:var(--muted)">zelená</div></div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot cyan"></div>
+      <div class="legend-text"><div class="legend-pts">+3</div><div style="font-size:11px;color:var(--muted)">modrá</div></div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot orange"></div>
+      <div class="legend-text"><div class="legend-pts">+5</div><div style="font-size:11px;color:var(--muted)">oranžová</div></div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot red"></div>
+      <div class="legend-text"><div class="legend-pts">+10</div><div style="font-size:11px;color:var(--muted)">červená</div></div>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="startGame()">HRÁT!</button>
+  <button class="btn btn-secondary btn-slim" onclick="showLeaderboard()">TOP 10</button>
+  <button id="install-btn" class="btn btn-secondary btn-slim hidden" onclick="installPWA()" style="font-size:16px">Přidat na plochu</button>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="screen-gameover" class="screen hidden">
+  <div id="gameover-click-block"></div>
+  <div style="font-family:'Nunito',sans-serif;font-size:36px;letter-spacing:2px;color:var(--muted)">HRA SKONČILA</div>
+  <div id="gameover-score">0</div>
+  <div id="name-section" class="name-input-wrap">
+    <label>Tvoje jméno</label>
+    <input type="text" id="player-name" placeholder="Hráč 1" maxlength="16" autocomplete="off">
+    <button class="btn btn-primary" onclick="saveScore()" style="font-size:20px;padding:12px 30px">ULOŽIT DO TOP 10</button>
+  </div>
+  <button id="share-btn" class="btn btn-share" style="font-size:18px" onclick="shareResult()">📤 SDÍLET VÝSLEDEK</button>
+  <button class="btn btn-secondary" style="font-size:18px" onclick="startGame()">HRÁT ZNOVU</button>
+  <button class="btn btn-secondary" style="font-size:18px" onclick="showLeaderboard()">TOP 10</button>
+</div>
+
+<!-- LEADERBOARD SCREEN -->
+<div id="screen-leaderboard" class="screen hidden">
+  <div style="font-family:'Nunito',sans-serif;font-size:38px;color:var(--dot-cyan)">TOP 10</div>
+  <div id="leaderboard"></div>
+  <button class="btn btn-primary" onclick="startGame()">HRÁT!</button>
+  <button class="btn btn-secondary" onclick="backToStart()">ZPĚT</button>
+</div>
+
+
+<div id="version-tag"></div>
+<script src="game.js"></script>
+<script>document.getElementById('version-tag').textContent = 'v' + VERSION;</script>
+</body>
+</html>
