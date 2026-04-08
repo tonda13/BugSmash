@@ -1,5 +1,5 @@
 // ─── BugSmash Game Engine ───────────────────────────────────────────
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 
 const DOT_TYPES = [
   { color: 'green',  points: 1,  weight: 40, size: 52 },
@@ -260,6 +260,7 @@ function removeDot(id, expired) {
   const idx = state.activeDots.findIndex(d => d.id === id);
   if (idx === -1) return;
   const d = state.activeDots.splice(idx, 1)[0];
+  d.el.style.pointerEvents = 'none';
   d.el.style.transition = 'transform .15s, opacity .15s';
   d.el.style.transform = expired ? 'translate(-50%,-50%) scale(0) rotate(20deg)' : 'translate(-50%,-50%) scale(1.4)';
   d.el.style.opacity = '0';
@@ -342,6 +343,7 @@ function removeHeart(expired) {
   if (!state.activeHeart) return;
   const h = state.activeHeart;
   state.activeHeart = null;
+  h.el.style.pointerEvents = 'none';
   h.el.style.transition = 'transform .15s, opacity .15s';
   h.el.style.transform = expired ? 'translate(-50%,-50%) scale(0)' : 'translate(-50%,-50%) scale(1.5)';
   h.el.style.opacity = '0';

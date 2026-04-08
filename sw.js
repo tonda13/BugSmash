@@ -1,4 +1,4 @@
-const CACHE = 'bugsmash-v6';
+const CACHE = 'bugsmash-v7';
 const ASSETS = [
   './',
   './index.html',
